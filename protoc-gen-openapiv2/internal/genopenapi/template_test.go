@@ -8781,3 +8781,247 @@ func TestArrayMessageItemsType(t *testing.T) {
 		t.Errorf("got: %s", fmt.Sprint(result))
 	}
 }
+
+func TestSingleFieldMaskHidden(t *testing.T) {
+	bookDesc := &descriptorpb.DescriptorProto{
+		Name: proto.String("Book"),
+		Field: []*descriptorpb.FieldDescriptorProto{
+			{
+				Name:   proto.String("id"),
+				Label:  descriptorpb.FieldDescriptorProto_LABEL_REQUIRED.Enum(),
+				Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+				Number: proto.Int32(1),
+			},
+			{
+				Name:   proto.String("name"),
+				Label:  descriptorpb.FieldDescriptorProto_LABEL_REQUIRED.Enum(),
+				Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+				Number: proto.Int32(2),
+			},
+		},
+	}
+
+	updateBookRequestDesc := &descriptorpb.DescriptorProto{
+		Name: proto.String("UpdateBookRequest"),
+		Field: []*descriptorpb.FieldDescriptorProto{
+			{
+				Name:     proto.String("book"),
+				Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
+				TypeName: proto.String(".example.Book"),
+				Number:   proto.Int32(1),
+			},
+			{
+				Name:     proto.String("update_mask"),
+				Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
+				TypeName: proto.String(".google.protobuf.FieldMask"),
+				Number:   proto.Int32(2),
+			},
+		},
+	}
+
+	updateBookResponseDesc := &descriptorpb.DescriptorProto{
+		Name: proto.String("UpdateBookResponse"),
+	}
+
+	updateMethodDesc := &descriptorpb.MethodDescriptorProto{
+		Name:       proto.String("UpdateBook"),
+		InputType:  proto.String("UpdateBookRequest"),
+		OutputType: proto.String("UpdateBookResponse"),
+	}
+	serviceDesc := &descriptorpb.ServiceDescriptorProto{
+		Name:   proto.String("BookService"),
+		Method: []*descriptorpb.MethodDescriptorProto{updateMethodDesc},
+	}
+	bookMsg := &descriptor.Message{
+		DescriptorProto: bookDesc,
+	}
+	updateBookRequestMsg := &descriptor.Message{
+		DescriptorProto: updateBookRequestDesc,
+	}
+	updateBookResponseMsg := &descriptor.Message{
+		DescriptorProto: updateBookResponseDesc,
+	}
+
+	idField := &descriptor.Field{
+		Message:              bookMsg,
+		FieldDescriptorProto: bookMsg.GetField()[0],
+	}
+	idField.JsonName = proto.String("id")
+	nameField := &descriptor.Field{
+		Message:              bookMsg,
+		FieldDescriptorProto: bookMsg.GetField()[1],
+	}
+	nameField.JsonName = proto.String("name")
+	bookMsg.Fields = []*descriptor.Field{idField, nameField}
+
+	bookField := &descriptor.Field{
+		Message:              updateBookRequestMsg,
+		FieldMessage:         bookMsg,
+		FieldDescriptorProto: updateBookRequestMsg.GetField()[0],
+	}
+	bookField.JsonName = proto.String("book")
+	fieldMaskField := &descriptor.Field{
+		Message:              updateBookRequestMsg,
+		FieldMessage:         bookMsg,
+		FieldDescriptorProto: updateBookRequestMsg.GetField()[1],
+	}
+	fieldMaskField.JsonName = proto.String("updateMask")
+	updateBookRequestMsg.Fields = []*descriptor.Field{bookField, fieldMaskField}
+
+	file := descriptor.File{
+		FileDescriptorProto: &descriptorpb.FileDescriptorProto{
+			SourceCodeInfo: &descriptorpb.SourceCodeInfo{},
+			// grpc.gateway.examples.internal.proto.examplepb
+			Package:     proto.String("example"),
+			Name:        proto.String("book.proto"),
+			Dependency:  []string{"google/well_known.proto"},
+			MessageType: []*descriptorpb.DescriptorProto{bookDesc, updateBookRequestDesc, updateBookResponseDesc},
+			Service:     []*descriptorpb.ServiceDescriptorProto{serviceDesc},
+			Options: &descriptorpb.FileOptions{
+				GoPackage: proto.String("github.com/grpc-ecosystem/grpc-gateway/runtime/internal/examplepb;example"),
+			},
+		},
+		GoPkg: descriptor.GoPackage{
+			Path: "example.com/path/to/example/example.pb",
+			Name: "example_pb",
+		},
+		Messages: []*descriptor.Message{bookMsg, updateBookRequestMsg, updateBookResponseMsg},
+		Services: []*descriptor.Service{
+			{
+				ServiceDescriptorProto: serviceDesc,
+				Methods: []*descriptor.Method{
+					{
+						MethodDescriptorProto: updateMethodDesc,
+						RequestType:           updateBookRequestMsg,
+						ResponseType:          updateBookResponseMsg,
+						Bindings: []*descriptor.Binding{
+							{
+								HTTPMethod: "PATCH",
+								PathTmpl: httprule.Template{
+									Version:  1,
+									OpCodes:  []int{0, 0},
+									Template: "/v1/books/{book.id}",
+								},
+								PathParams: []descriptor.Parameter{
+									{
+										FieldPath: descriptor.FieldPath([]descriptor.FieldPathComponent{
+											{
+												Name: "book",
+											},
+											{
+												Name: "id",
+											},
+										}),
+										Target: idField,
+									},
+								},
+								Body: &descriptor.Body{
+									FieldPath: []descriptor.FieldPathComponent{
+										{
+											Name:   "book",
+											Target: bookField,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	reg := descriptor.NewRegistry()
+	reg.SetUseJSONNamesForFields(true)
+
+	err := reg.Load(&pluginpb.CodeGeneratorRequest{
+		ProtoFile: []*descriptorpb.FileDescriptorProto{
+			{
+				SourceCodeInfo: &descriptorpb.SourceCodeInfo{},
+				Name:           proto.String("google/well_known.proto"),
+				Package:        proto.String("google.protobuf"),
+				Dependency:     []string{},
+				MessageType: []*descriptorpb.DescriptorProto{
+					{
+						Name: proto.String("FieldMask"),
+						Field: []*descriptorpb.FieldDescriptorProto{
+							{
+								Name:   proto.String("paths"),
+								Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+								Label:  descriptorpb.FieldDescriptorProto_LABEL_REPEATED.Enum(),
+								Number: proto.Int32(1),
+							},
+						},
+					},
+				},
+				Service: []*descriptorpb.ServiceDescriptorProto{},
+				Options: &descriptorpb.FileOptions{
+					GoPackage: proto.String("google/well_known"),
+				},
+			},
+			file.FileDescriptorProto,
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to reg.Load(): %v", err)
+	}
+	result, err := applyTemplate(param{File: crossLinkFixture(&file), reg: reg})
+	if err != nil {
+		t.Fatalf("applyTemplate(%#v) failed with %v; want success", file, err)
+	}
+
+	paths := GetPaths(result)
+	if got, want := len(paths), 1; got != want {
+		t.Fatalf("Results path length differed, got %d want %d", got, want)
+	}
+
+	if got, want := paths[0], "/v1/books/{book.id}"; got != want {
+		t.Fatalf("Wrong results path, got %s want %s", got, want)
+	}
+
+	var operation = *result.Paths["/v1/books/{book.id}"].Patch
+	if got, want := len(operation.Parameters), 2; got != want {
+		t.Fatalf("Parameters length differed, got %d want %d", got, want)
+	}
+
+	if got, want := operation.Parameters[0].Name, "book.id"; got != want {
+		t.Fatalf("Wrong parameter name, got %s want %s", got, want)
+	}
+
+	if got, want := operation.Parameters[0].In, "path"; got != want {
+		t.Fatalf("Wrong parameter location, got %s want %s", got, want)
+	}
+
+	if got, want := operation.Parameters[1].Name, "book"; got != want {
+		t.Fatalf("Wrong parameter name, got %s want %s", got, want)
+	}
+
+	if got, want := operation.Parameters[1].In, "body"; got != want {
+		t.Fatalf("Wrong parameter location, got %s want %s", got, want)
+	}
+
+	// if got, want := operation.Parameters[2].Name, "updateMask"; got != want {
+	// 	t.Fatalf("Wrong parameter name, got %s want %s", got, want)
+	// }
+
+	// if got, want := operation.Parameters[2].In, "query"; got != want {
+	// 	t.Fatalf("Wrong parameter location, got %s want %s", got, want)
+	// }
+
+	// The body parameter should be inlined and not contain 'name', as this is a path parameter.
+	schema := operation.Parameters[1].Schema
+	if got, want := schema.Ref, ""; got != want {
+		t.Fatalf("Wrong reference, got %s want %s", got, want)
+	}
+	props := schema.Properties
+	if props == nil {
+		t.Fatal("No properties on body parameter")
+	}
+	if got, want := len(*props), 1; got != want {
+		t.Fatalf("Properties length differed, got %d want %d", got, want)
+	}
+	for _, v := range *props {
+		if got, want := v.Key, "name"; got != want {
+			t.Fatalf("Wrong key for property, got %s want %s", got, want)
+		}
+	}
+}
